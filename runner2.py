@@ -148,6 +148,13 @@ def get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_
     return content_recs[:100], collaborative_recs[:100], sorted_recommendations
 
 # API to get hybrid recommendations
+@app.before_request
+def initialize_data():
+    global movies_df, ratings_df, ratings_matrix
+    movies_df, ratings_df, _ = preprocess_data()
+    ratings_matrix = build_ratings_matrix(ratings_df)
+
+
 @app.route('/recommendations', methods=['POST'])
 def recommendations():
     start_time = time.time()
@@ -161,8 +168,8 @@ def recommendations():
         if user_id is None or not isinstance(user_id, int):
             return jsonify({'error': 'Invalid user index'}), 400
 
-        movies_df, ratings_df, _ = preprocess_data()
-        ratings_matrix = build_ratings_matrix(ratings_df)
+        # movies_df, ratings_df, _ = preprocess_data()
+        # ratings_matrix = build_ratings_matrix(ratings_df)
 
         if user_id > ratings_matrix.shape[0]:
             return jsonify({'error': 'Invalid user index'}), 400
