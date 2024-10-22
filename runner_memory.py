@@ -60,7 +60,7 @@ def build_nearest_neighbors(matrix, n_neighbors=50, metric='cosine'):
     nn.fit(matrix)
     return nn
 
-@lru_cache(maxsize=1000)
+# @lru_cache(maxsize=1000)
 def get_content_based_recommendations(movie_id_tuple, num_recommendations=5, current_movie=None):
     movies_df = global_data.movies_df
     tfidf_matrix = global_data.tfidf_matrix
@@ -130,7 +130,6 @@ def get_content_based_recommendations(movie_id_tuple, num_recommendations=5, cur
             unique_recommendations.append(rec)
     
     return unique_recommendations
-
 def get_collaborative_recommendations(user_id, num_recommendations=5, current_movie=None):
     user_index = user_id - 1
     collaborative_nn = global_data.collaborative_nn
