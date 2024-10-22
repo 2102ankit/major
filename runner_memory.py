@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from flask import Flask, request, jsonify
+from flask_cors import CORS  # Import CORS
 from scipy.sparse import csr_matrix, vstack
 import time
 from joblib import Memory
@@ -13,6 +14,7 @@ from sklearn.neighbors import NearestNeighbors
 # Initialize memory caching
 memory = Memory(location='.cache', verbose=0)
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Global variables for pre-computed data
 global_data = threading.local()
@@ -82,7 +84,8 @@ def get_content_based_recommendations(movie_id_tuple, num_recommendations=5):
             recommended_movies.extend({
                 'movieId': int(movies_df.iloc[idx]['movieId']),
                 'title': movies_df.iloc[idx]['title'],
-                'score': float(sim) * 5,
+                # 'score': float(sim) * 5,
+                'score': float(sim),
                 'reason': 'Content-Based Filtering'
             } for sim, idx in zip(similarities[1:], indices[0][1:]))
     
@@ -185,6 +188,13 @@ def initialize_data():
     global_data.content_nn = build_nearest_neighbors(global_data.tfidf_matrix)
     global_data.collaborative_nn = build_nearest_neighbors(global_data.ratings_matrix)
 
+@app.route('/movies', methods=['GET'])
+def get_movies():
+    movies_df = global_data.movies_df
+    movies_list = movies_df[['movieId', 'title']].to_dict(orient='records')
+    return jsonify(movies_list)
+
+
 @app.route('/recommendations', methods=['POST'])
 def recommendations():
     start_time = time.time()
@@ -193,7 +203,8 @@ def recommendations():
         user_id = data.get('userIndex')
         current_movie = data.get('currentMovie')
         weights = data.get('weights', {'content': 0.5, 'collaborative': 0.5})
-        num_recommendations = data.get('numRecommendations', 10)
+        # num_recommendations = data.get('numRecommendations', 10)
+        num_recommendations = data.get('numRecommendations')
 
         if user_id is None or not isinstance(user_id, int):
             return jsonify({'error': 'Invalid user index'}), 400
