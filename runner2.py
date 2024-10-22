@@ -50,7 +50,7 @@ def get_content_based_recommendations(movie_ids, movies_df, num_recommendations=
             recommended_movies.extend({
                 'movieId': int(movies_df.iloc[sim_movie]['movieId']),
                 'title': movies_df.iloc[sim_movie]['title'],
-                'score': float(genre_similarity[movie_idx][sim_movie]),
+                'score': float(genre_similarity[movie_idx][sim_movie]) * 5,  # Multiply by 5
                 'reason': 'Content-Based Filtering'
             } for sim_movie in similar_movies)
 
@@ -101,26 +101,29 @@ def get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_
     
     # Combine recommendations based on weights
     combined_recs = {}
-    
+
+    # Add content recommendations to combined list
     for rec in content_recs:
         combined_recs[rec['movieId']] = {
             'movieId': rec['movieId'],
             'title': rec['title'],
-            'score': rec['score'] * weights['content'],
+            'score': rec['score'] * weights['content'],  # Adjust content score
             'reason': rec['reason']
         }
     
+    # Add collaborative recommendations to combined list
     for rec in collaborative_recs:
         if rec['movieId'] in combined_recs:
-            combined_recs[rec['movieId']]['score'] += rec['predictedRating'] * weights['collaborative']
+            combined_recs[rec['movieId']]['score'] += rec['predictedRating'] * weights['collaborative']  # Adjust collaborative score
         else:
             combined_recs[rec['movieId']] = {
                 'movieId': rec['movieId'],
                 'title': rec['title'],
-                'score': rec['predictedRating'] * weights['collaborative'],
+                'score': rec['predictedRating'] * weights['collaborative'],  # Adjust collaborative score
                 'reason': rec['reason']
             }
-    
+
+    # Sort combined recommendations based on the new score
     return sorted(combined_recs.values(), key=lambda x: x['score'], reverse=True)[:num_recommendations]
 
 # API to get hybrid recommendations
