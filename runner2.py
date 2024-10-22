@@ -5,6 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from flask import Flask, request, jsonify
 from scipy.sparse import csr_matrix
 from concurrent.futures import ThreadPoolExecutor
+import time
 
 app = Flask(__name__)
 
@@ -116,6 +117,7 @@ def get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_
 # API to get hybrid recommendations
 @app.route('/recommendations', methods=['POST'])
 def recommendations():
+    start_time = time.time()  # Start time for the request
     try:
         data = request.json
         user_id = data.get('userIndex')
@@ -137,11 +139,17 @@ def recommendations():
 
         hybrid_recommendations = get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_recommendations)
         
-        return jsonify(hybrid_recommendations)
+        end_time = time.time()  # End time for the request
+        response_time = end_time - start_time  # Calculate response time
+        
+        return jsonify({
+            'recommendations': hybrid_recommendations,
+            'response_time': response_time
+        })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 # Start the Flask server
 if __name__ == '__main__':
-    app.run(port=3000, debug=True)
+    app.run(port=5000, debug=True)
