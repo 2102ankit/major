@@ -103,25 +103,45 @@ def get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_
 
     collaborative_recs = get_collaborative_recommendations(user_id, ratings_matrix, movies_df, num_recommendations, current_movie)
 
+    # Create sets of movie IDs for intersection
+    content_movie_ids = {rec['movieId'] for rec in content_recs}
+    collaborative_movie_ids = {rec['movieId'] for rec in collaborative_recs}
+
+    # Find common intersecting movies
+    intersecting_movies = content_movie_ids.intersection(collaborative_movie_ids)
+
     combined_recs = {}
-    for rec in content_recs:
-        combined_recs[rec['movieId']] = {
-            'movieId': rec['movieId'],
-            'title': rec['title'],
-            'score': rec['score'] * weights['content'],
-            'reason': rec['reason']
+    
+    # Combine scores for intersecting movies
+    for movie_id in intersecting_movies:
+        content_rec = next(rec for rec in content_recs if rec['movieId'] == movie_id)
+        collaborative_rec = next(rec for rec in collaborative_recs if rec['movieId'] == movie_id)
+
+        combined_recs[movie_id] = {
+            'movieId': movie_id,
+            'title': content_rec['title'],  # Title from content rec
+            'score': (content_rec['score'] * weights['content'] + collaborative_rec['predictedRating'] * weights['collaborative']),
+            'reason': 'Combined Content and Collaborative Filtering'
         }
 
-    for rec in collaborative_recs:
-        if rec['movieId'] in combined_recs:
-            combined_recs[rec['movieId']]['score'] += rec['predictedRating'] * weights['collaborative']
-        else:
-            combined_recs[rec['movieId']] = {
-                'movieId': rec['movieId'],
-                'title': rec['title'],
-                'score': rec['predictedRating'] * weights['collaborative'],
-                'reason': rec['reason']
-            }
+    # Add non-intersecting recommendations
+    # for rec in content_recs:
+    #     if rec['movieId'] not in combined_recs:
+    #         combined_recs[rec['movieId']] = {
+    #             'movieId': rec['movieId'],
+    #             'title': rec['title'],
+    #             'score': rec['score'] * weights['content'],
+    #             'reason': 'Content-Based Filtering'
+    #         }
+
+    # for rec in collaborative_recs:
+    #     if rec['movieId'] not in combined_recs:
+    #         combined_recs[rec['movieId']] = {
+    #             'movieId': rec['movieId'],
+    #             'title': rec['title'],
+    #             'score': rec['predictedRating'] * weights['collaborative'],
+    #             'reason': 'Collaborative Filtering'
+    #         }
 
     sorted_recommendations = sorted(combined_recs.values(), key=lambda x: x['score'], reverse=True)[:num_recommendations]
 
