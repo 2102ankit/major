@@ -57,7 +57,7 @@ def get_content_based_recommendations(movie_ids, movies_df, num_recommendations=
     return recommended_movies
 
 # Collaborative Filtering using Cosine Similarity
-def get_collaborative_recommendations(user_id, ratings_matrix, movies_df, num_recommendations=5):
+def get_collaborative_recommendations(user_id, ratings_matrix, movies_df, num_recommendations=5, current_movie=None):
     user_similarity = cosine_similarity(ratings_matrix)
     user_index = user_id - 1
     user_ratings = ratings_matrix[user_index].toarray().flatten()
@@ -79,16 +79,25 @@ def get_collaborative_recommendations(user_id, ratings_matrix, movies_df, num_re
                     'reason': 'Collaborative Filtering'
                 })
     
+    # Filter out the current movie if specified
+    if current_movie is not None:
+        recommended_movies = [rec for rec in recommended_movies if rec['movieId'] != current_movie]
+    
     return sorted(recommended_movies, key=lambda x: x['predictedRating'], reverse=True)[:num_recommendations]
 
 # Hybrid Recommendation System
-def get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_recommendations=10):
+def get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_recommendations=10, current_movie=None):
     user_index = user_id - 1
     user_ratings = ratings_matrix[user_index].toarray().flatten()
     user_positive_ratings = np.where(user_ratings >= 4)[0].tolist()
     
-    content_recs = get_content_based_recommendations([movies_df.iloc[i]['movieId'] for i in user_positive_ratings], movies_df, num_recommendations)
-    collaborative_recs = get_collaborative_recommendations(user_id, ratings_matrix, movies_df, num_recommendations)
+    content_recs = get_content_based_recommendations(
+        [movies_df.iloc[i]['movieId'] for i in user_positive_ratings],
+        movies_df,
+        num_recommendations
+    )
+    
+    collaborative_recs = get_collaborative_recommendations(user_id, ratings_matrix, movies_df, num_recommendations, current_movie)
     
     # Combine recommendations based on weights
     combined_recs = {}
@@ -121,6 +130,7 @@ def recommendations():
     try:
         data = request.json
         user_id = data.get('userIndex')
+        current_movie = data.get('currentMovie')  # Get the current movie from request
         weights = data.get('weights', {'content': 0.5, 'collaborative': 0.5})  # Default weights
         num_recommendations = data.get('numRecommendations', 10)  # Default number of recommendations
 
@@ -137,14 +147,22 @@ def recommendations():
         if user_id > ratings_matrix.shape[0]:
             return jsonify({'error': 'Invalid user index'}), 400
 
-        hybrid_recommendations = get_hybrid_recommendations(user_id, ratings_matrix, movies_df, weights, num_recommendations)
+        hybrid_recommendations = get_hybrid_recommendations(
+            user_id,
+            ratings_matrix,
+            movies_df,
+            weights,
+            num_recommendations,
+            current_movie
+        )
         
         end_time = time.time()  # End time for the request
         response_time = end_time - start_time  # Calculate response time
         
         return jsonify({
             'recommendations': hybrid_recommendations,
-            'response_time': response_time
+            'response_time': response_time,
+            'currentMovie': current_movie  # Include the current movie in the response
         })
 
     except Exception as e:
@@ -152,4 +170,4 @@ def recommendations():
 
 # Start the Flask server
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=3000, debug=True)
