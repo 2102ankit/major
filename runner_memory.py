@@ -61,35 +61,75 @@ def build_nearest_neighbors(matrix, n_neighbors=50, metric='cosine'):
     return nn
 
 @lru_cache(maxsize=1000)
-def get_content_based_recommendations(movie_id_tuple, num_recommendations=5):
+def get_content_based_recommendations(movie_id_tuple, num_recommendations=5, current_movie=None):
     movies_df = global_data.movies_df
     tfidf_matrix = global_data.tfidf_matrix
     content_nn = global_data.content_nn
-    movie_indices = movies_df.set_index('movieId').index
     
-    movie_ids = list(movie_id_tuple)
     recommended_movies = []
     
-    for movie_id in movie_ids:
-        if movie_id in movie_indices:
-            movie_idx = movies_df[movies_df['movieId'] == movie_id].index[0]
+    # First, get recommendations based on current movie if provided
+    if current_movie is not None:
+        # Find the correct index for current movie using movieId
+        try:
+            current_movie_idx = movies_df[movies_df['movieId'] == current_movie].index[0]
+            current_movie_title = movies_df.iloc[current_movie_idx]['title']
+            
             distances, indices = content_nn.kneighbors(
-                tfidf_matrix[movie_idx:movie_idx+1], 
+                tfidf_matrix[current_movie_idx:current_movie_idx+1],
                 n_neighbors=501
             )
             
-            # Convert distances to similarities (1 - distance for cosine)
             similarities = 1 - distances[0]
             
-            recommended_movies.extend({
+            # Add recommendations from current movie with high weight
+            current_movie_recs = [{
                 'movieId': int(movies_df.iloc[idx]['movieId']),
                 'title': movies_df.iloc[idx]['title'],
-                # 'score': float(sim) * 5,
-                'score': float(sim),
-                'reason': 'Content-Based Filtering'
-            } for sim, idx in zip(similarities[1:], indices[0][1:]))
+                'score': float(sim)*5,
+                'reason': f'Similar to current movie: {current_movie_title}'
+            } for sim, idx in zip(similarities[1:], indices[0][1:])
+            if int(movies_df.iloc[idx]['movieId']) != current_movie]
+            
+            recommended_movies.extend(current_movie_recs)
+        except IndexError:
+            print(f"Movie ID {current_movie} not found in dataset")
     
-    return recommended_movies
+    # Then get recommendations based on user's highly rated movies
+    for movie_id in movie_id_tuple:
+        try:
+            # Find the correct index for each movie using movieId
+            movie_idx = movies_df[movies_df['movieId'] == movie_id].index[0]
+            movie_title = movies_df.iloc[movie_idx]['title']
+            
+            distances, indices = content_nn.kneighbors(
+                tfidf_matrix[movie_idx:movie_idx+1],
+                n_neighbors=101
+            )
+            
+            similarities = 1 - distances[0]
+            
+            user_pref_recs = [{
+                'movieId': int(movies_df.iloc[idx]['movieId']),
+                'title': movies_df.iloc[idx]['title'],
+                'score': float(sim) * 0.5,
+                'reason': f'Based on your interest in: {movie_title}'
+            } for sim, idx in zip(similarities[1:], indices[0][1:])
+            if int(movies_df.iloc[idx]['movieId']) != current_movie]
+            
+            recommended_movies.extend(user_pref_recs)
+        except IndexError:
+            print(f"Movie ID {movie_id} not found in dataset")
+    
+    # Sort by score and remove duplicates
+    seen_movies = set()
+    unique_recommendations = []
+    for rec in sorted(recommended_movies, key=lambda x: x['score'], reverse=True):
+        if rec['movieId'] not in seen_movies:
+            seen_movies.add(rec['movieId'])
+            unique_recommendations.append(rec)
+    
+    return unique_recommendations
 
 def get_collaborative_recommendations(user_id, num_recommendations=5, current_movie=None):
     user_index = user_id - 1
@@ -139,7 +179,14 @@ def get_hybrid_recommendations(user_id, weights, num_recommendations=10, current
     user_positive_ratings = tuple(global_data.movies_df.iloc[i]['movieId'] 
                                 for i in np.where(user_ratings >= 4)[0])
     
-    content_recs = get_content_based_recommendations(user_positive_ratings, num_recommendations)
+    # Adjust weights to emphasize content-based if current_movie is provided
+    # if current_movie is not None:
+    #     weights = {
+    #         'content': 0.7,  # Increase content-based weight
+    #         'collaborative': 0.3  # Decrease collaborative weight
+    #     }
+    
+    content_recs = get_content_based_recommendations(user_positive_ratings, num_recommendations, current_movie)
     collaborative_recs = get_collaborative_recommendations(user_id, num_recommendations, current_movie)
     
     # Use numpy operations for faster processing
@@ -165,7 +212,7 @@ def get_hybrid_recommendations(user_id, weights, num_recommendations=10, current
         'movieId': int(movie_ids[idx]),
         'title': content_dict[movie_ids[idx]]['title'],
         'score': float(combined_scores[idx]),
-        'reason': 'Combined Content and Collaborative Filtering'
+        'reason': f'Similar to current movie and matches your preferences'
     } for idx in sorted_indices[:num_recommendations]]
     
     return (
@@ -202,6 +249,7 @@ def recommendations():
         data = request.json
         user_id = data.get('userIndex')
         current_movie = data.get('currentMovie')
+        print(current_movie)
         weights = data.get('weights', {'content': 0.5, 'collaborative': 0.5})
         # num_recommendations = data.get('numRecommendations', 10)
         num_recommendations = data.get('numRecommendations')
