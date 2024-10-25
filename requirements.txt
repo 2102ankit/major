@@ -5,4 +5,3 @@ Flask
 Flask-Cors
 scipy
 joblib
-functools
