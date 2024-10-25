@@ -1,161 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Movie Recommendation System</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 20px;
-        padding: 20px;
-        background-color: #f4f4f4;
-      }
-      input, select {
-        margin: 5px;
-        padding: 8px;
-        width: 200px;
-      }
-      button {
-        padding: 10px 15px;
-        background-color: #28a745;
-        color: white;
-        border: none;
-        cursor: pointer;
-      }
-      button:hover {
-        background-color: #218838;
-      }
-      .result {
-        margin-top: 20px;
-        background-color: white;
-        padding: 10px;
-        border-radius: 5px;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      }
-      .movie {
-        margin: 5px 0;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>Movie Recommendation System</h1>
-    <div>
-      <label for="userId">User ID:</label>
-      <input type="number" id="userId" required value="2" />
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white p-10">
+    <h1 class="text-3xl font-bold mb-5">Movie Recommendation System</h1>
+    <div class="bg-gray-800 p-5 rounded-lg shadow-lg">
+        <label for="userId" class="block mb-2">User ID:</label>
+        <input type="number" id="userId" required value="2" class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full" />
 
-      <label for="currentMovieId">Current Movie:</label>
-      <select id="currentMovieId" required>
-        <option value="">Select a movie</option>
-        <!-- Options will be populated here -->
-      </select>
+        <label for="currentMovieId" class="block mb-2">Current Movie:</label>
+        <select id="currentMovieId" required class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full">
+            <option value="">Select a movie</option>
+            <!-- Options will be populated here -->
+        </select>
 
-      <br />
+        <label for="numOfRecommendations" class="block mb-2">No of Recommendations:</label>
+        <input type="number" id="numOfRecommendations" required value="10" class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full" />
 
-      <label for="numOfRecommendations">No of Recommendations:</label>
-      <input type="number" id="numOfRecommendations" required value="10" />
+        <label for="contentWeight" class="block mb-2">Content Weight:</label>
+        <input type="number" id="contentWeight" value="0.5" step="0.1" min="0" max="1" class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full" />
 
-      <br />
-      <label for="contentWeight">Content Weight:</label>
-      <input
-        type="number"
-        id="contentWeight"
-        value="0.5"
-        step="0.1"
-        min="0"
-        max="1"
-      />
+        <label for="collaborativeWeight" class="block mb-2">Collaborative Weight:</label>
+        <input type="number" id="collaborativeWeight" value="0.5" step="0.1" min="0" max="1" class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full" />
 
-      <br />
-      <label for="collaborativeWeight">Collaborative Weight:</label>
-      <input
-        type="number"
-        id="collaborativeWeight"
-        value="0.5"
-        step="0.1"
-        min="0"
-        max="1"
-      />
-
-      <br />
-      <br />
-      <button id="getRecommendations">Get Recommendations</button>
+        <button id="getRecommendations" class="mt-4 text-white bg-purple-700 hover:bg-purple-800 focus:outline-none focus:ring-4 focus:ring-purple-300 font-medium rounded-lg px-4 py-2">Get Recommendations</button>
     </div>
 
-    <div id="results" class="result"></div>
+    <div id="results" class="result mt-5 bg-white text-black p-5 rounded-lg shadow-md"></div>
 
     <script>
-      async function fetchMovies() {
-        const response = await fetch('http://127.0.0.1:3000/movies');
-        const movies = await response.json();
-        const select = document.getElementById('currentMovieId');
+        async function fetchMovies() {
+            const response = await fetch('http://127.0.0.1:3000/movies');
+            const movies = await response.json();
+            const select = document.getElementById('currentMovieId');
 
-        movies.forEach(movie => {
-          const option = document.createElement('option');
-          option.value = movie.movieId;  // Movie ID
-          option.textContent = movie.title;  // Movie title
-          select.appendChild(option);
-        });
-      }
-
-      document
-        .getElementById("getRecommendations")
-        .addEventListener("click", async () => {
-          const userId = parseInt(document.getElementById("userId").value);
-          const numOfRecommendations = parseInt(document.getElementById("numOfRecommendations").value);
-          const currentMovieId = parseInt(document.getElementById("currentMovieId").value);
-          console.log(userId, numOfRecommendations, currentMovieId);
-          const contentWeight = parseFloat(document.getElementById("contentWeight").value);
-          const collaborativeWeight = parseFloat(document.getElementById("collaborativeWeight").value);
-
-          const weights = {
-            content: contentWeight,
-            collaborative: collaborativeWeight,
-          };
-
-          const response = await fetch("http://127.0.0.1:3000/recommendations", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userIndex: userId,
-              currentMovie: currentMovieId,
-              weights: weights,
-              numRecommendations: numOfRecommendations,
-            }),
-          });
-
-          const data = await response.json();
-          displayResults(data);
-        });
-
-      function displayResults(data) {
-        const resultsDiv = document.getElementById("results");
-        resultsDiv.innerHTML = "";
-
-        if (data.error) {
-          resultsDiv.innerHTML = `<p>Error: ${data.error}</p>`;
-          return;
+            movies.forEach(movie => {
+                const option = document.createElement('option');
+                option.value = movie.movieId;  // Movie ID
+                option.textContent = movie.title;  // Movie title
+                select.appendChild(option);
+            });
         }
 
-        const recommendations = data.recommendations;
+        document.getElementById("getRecommendations").addEventListener("click", async () => {
+            const userId = parseInt(document.getElementById("userId").value);
+            const numOfRecommendations = parseInt(document.getElementById("numOfRecommendations").value);
+            const currentMovieId = parseInt(document.getElementById("currentMovieId").value);
+            const contentWeight = parseFloat(document.getElementById("contentWeight").value);
+            const collaborativeWeight = parseFloat(document.getElementById("collaborativeWeight").value);
 
-        if (recommendations.length === 0) {
-          resultsDiv.innerHTML = "<p>No recommendations found.</p>";
-          return;
+            const weights = {
+                content: contentWeight,
+                collaborative: collaborativeWeight,
+            };
+
+            const response = await fetch("http://127.0.0.1:3000/recommendations", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    userIndex: userId,
+                    currentMovie: currentMovieId,
+                    weights: weights,
+                    numRecommendations: numOfRecommendations,
+                }),
+            });
+
+            const data = await response.json();
+            displayResults(data);
+        });
+
+        function displayResults(data) {
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = "";
+
+            if (data.error) {
+                resultsDiv.innerHTML = `<p class="text-red-500">Error: ${data.error}</p>`;
+                return;
+            }
+
+            const recommendations = data.recommendations;
+
+            if (recommendations.length === 0) {
+                resultsDiv.innerHTML = "<p>No recommendations found.</p>";
+                return;
+            }
+
+            recommendations.forEach((movie) => {
+                const movieDiv = document.createElement("div");
+                movieDiv.className = "movie bg-gray-100 p-2 rounded-lg shadow-md mb-2";
+                movieDiv.textContent = `Title: ${movie.title}, Score: ${movie.score.toFixed(2)}, Id: ${movie.movieId}`;
+                resultsDiv.appendChild(movieDiv);
+            });
         }
 
-        recommendations.forEach((movie) => {
-          const movieDiv = document.createElement("div");
-          movieDiv.className = "movie";
-          movieDiv.textContent = `Title: ${movie.title}, Score: ${movie.score.toFixed(2)}, Id: ${movie.movieId}`;
-          resultsDiv.appendChild(movieDiv);
-        });
-      }
-
-      // Fetch movies when the page loads
-      fetchMovies();
+        // Fetch movies when the page loads
+        fetchMovies();
     </script>
-  </body>
+</body>
 </html>
