@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Movie Recommendation System</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body class="bg-gray-900 text-white p-10">
     <h1 class="text-3xl font-bold mb-5">Movie Recommendation System</h1>
@@ -33,10 +34,14 @@
     <div id="results" class="result mt-5 bg-white text-black p-5 rounded-lg shadow-md"></div>
 
     <script>
+        const TMDB_API_KEY = '';
+
+
         async function fetchMovies() {
             const response = await fetch('http://127.0.0.1:3000/movies');
             const movies = await response.json();
             const select = document.getElementById('currentMovieId');
+            console.log(movies.length);
 
             movies.forEach(movie => {
                 const option = document.createElement('option');
@@ -44,6 +49,16 @@
                 option.textContent = movie.title;  // Movie title
                 select.appendChild(option);
             });
+        }
+
+        async function fetchMoviePoster(tmdbId) {
+            try {
+                const response = await axios.get(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${TMDB_API_KEY}`);
+                return `https://image.tmdb.org/t/p/w200${response.data.poster_path}`;
+            } catch (error) {
+                console.error('Error fetching movie poster:', error);
+                return null;
+            }
         }
 
         document.getElementById("getRecommendations").addEventListener("click", async () => {
@@ -75,7 +90,7 @@
             displayResults(data);
         });
 
-        function displayResults(data) {
+        async function displayResults(data) {
             const resultsDiv = document.getElementById("results");
             resultsDiv.innerHTML = "";
 
@@ -91,12 +106,30 @@
                 return;
             }
 
-            recommendations.forEach((movie) => {
+            for (const movie of recommendations) {
                 const movieDiv = document.createElement("div");
-                movieDiv.className = "movie bg-gray-100 p-2 rounded-lg shadow-md mb-2";
-                movieDiv.textContent = `Title: ${movie.title}, Score: ${movie.score.toFixed(2)}, Id: ${movie.movieId}`;
+                movieDiv.className = "movie bg-gray-100 p-2 rounded-lg shadow-md mb-2 flex items-center";
+                
+                const posterUrl = await fetchMoviePoster(movie.tmdbId);
+                if (posterUrl) {
+                    const posterImg = document.createElement("img");
+                    posterImg.src = posterUrl;
+                    posterImg.alt = movie.title;
+                    posterImg.className = "w-20 h-auto mr-4";
+                    movieDiv.appendChild(posterImg);
+                }
+
+                const movieInfo = document.createElement("div");
+                movieInfo.innerHTML = `
+                    <p><strong>${movie.title}</strong></p>
+                    <p>Score: ${movie.score.toFixed(2)}</p>
+                    <p>Movie ID: ${movie.movieId}</p>
+                    <p>TMDb ID: ${movie.tmdbId}</p>
+                `;
+                movieDiv.appendChild(movieInfo);
+                
                 resultsDiv.appendChild(movieDiv);
-            });
+            }
         }
 
         // Fetch movies when the page loads

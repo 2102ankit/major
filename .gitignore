@@ -1,3 +1,33 @@
 /venv
-/env
-/.cache
+# Hide all .csv files
+*.csv
+
+# Node modules folder
+node_modules/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Environment and virtual environment folders
+.env/
+*.env
+.cache/
+Include/
+Lib/
+Scripts/
+
+# Log files
+*.log
+
+# Lock files
+package-lock.json
+
+# IDE specific files and folders
+.vscode/
+.idea/
+*.iml
+
+# Other unnecessary files
+.DS_Store
+*.bak

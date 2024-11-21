@@ -9,15 +9,23 @@ import time
 from joblib import Memory
 from functools import lru_cache
 import threading
+import logging
 from sklearn.neighbors import NearestNeighbors
 
 # Initialize memory caching
 memory = Memory(location='.cache', verbose=0)
 app = Flask(__name__)
+app.config['DEBUG'] = True
+app.logger.setLevel(logging.DEBUG)
 CORS(app)  # Enable CORS for all routes
 
 # Global variables for pre-computed data
 global_data = threading.local()
+
+
+@memory.cache
+def load_link_data():
+    return pd.read_csv('link.csv', dtype={'movieId': 'int32', 'imdbId': 'int32', 'tmdbId': 'float64'})
 
 @memory.cache
 def load_data():
@@ -211,7 +219,8 @@ def get_hybrid_recommendations(user_id, weights, num_recommendations=10, current
         'movieId': int(movie_ids[idx]),
         'title': content_dict[movie_ids[idx]]['title'],
         'score': float(combined_scores[idx]),
-        'reason': f'Similar to current movie and matches your preferences'
+        'reason': f'Similar to current movie and matches your preferences',
+        'tmdbId': int(global_data.link_df[global_data.link_df['movieId'] == movie_ids[idx]]['tmdbId'].values[0])
     } for idx in sorted_indices[:num_recommendations]]
     
     return (
@@ -233,6 +242,10 @@ def initialize_data():
     # Build nearest neighbors models
     global_data.content_nn = build_nearest_neighbors(global_data.tfidf_matrix)
     global_data.collaborative_nn = build_nearest_neighbors(global_data.ratings_matrix)
+
+    global_data.link_df = load_link_data()
+    global_data.link_df['tmdbId'] = global_data.link_df['tmdbId'].fillna(0).astype('int32')
+
 
 @app.route('/movies', methods=['GET'])
 def get_movies():
@@ -276,6 +289,13 @@ def recommendations():
             'currentMovie': current_movie
         })
 
+        # return jsonify({
+        #         'content_recommendations': content_recommendations,
+        #         'collaborative_recommendations': collaborative_recommendations,
+        #         'recommendations': hybrid_recommendations,
+        #         'response_time': end_time - start_time,
+        #         'currentMovie': current_movie
+        #     })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
