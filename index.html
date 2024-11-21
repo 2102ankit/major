@@ -20,7 +20,7 @@
         </select>
 
         <label for="numOfRecommendations" class="block mb-2">No of Recommendations:</label>
-        <input type="number" id="numOfRecommendations" required value="10" class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full" />
+        <input type="number" id="numOfRecommendations" required value="12" class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full" />
 
         <label for="contentWeight" class="block mb-2">Content Weight:</label>
         <input type="number" id="contentWeight" value="0.5" step="0.1" min="0" max="1" class="bg-gray-700 text-white border border-gray-600 rounded-lg p-2 mb-4 w-full" />
@@ -31,24 +31,24 @@
         <button id="getRecommendations" class="mt-4 text-white bg-purple-700 hover:bg-purple-800 focus:outline-none focus:ring-4 focus:ring-purple-300 font-medium rounded-lg px-4 py-2">Get Recommendations</button>
     </div>
 
-    <div id="results" class="result mt-5 bg-white text-black p-5 rounded-lg shadow-md"></div>
+    <div id="results" class="result mt-5 bg-white text-black p-5 rounded-lg shadow-md grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
 
     <script>
-        const TMDB_API_KEY = '';
-
+        const TMDB_API_KEY = 'fda05331dbb9ecec2afef04bc0f0e774';
 
         async function fetchMovies() {
             const response = await fetch('http://127.0.0.1:3000/movies');
             const movies = await response.json();
             const select = document.getElementById('currentMovieId');
-            console.log(movies.length);
+            select.innerHTML = '<option value="">Select a movie</option>';
 
             movies.forEach(movie => {
                 const option = document.createElement('option');
-                option.value = movie.movieId;  // Movie ID
-                option.textContent = movie.title;  // Movie title
+                option.value = movie.movieId;
+                option.textContent = movie.title;
                 select.appendChild(option);
             });
+            await getRecommendations();
         }
 
         async function fetchMoviePoster(tmdbId) {
@@ -61,7 +61,7 @@
             }
         }
 
-        document.getElementById("getRecommendations").addEventListener("click", async () => {
+        async function getRecommendations() {
             const userId = parseInt(document.getElementById("userId").value);
             const numOfRecommendations = parseInt(document.getElementById("numOfRecommendations").value);
             const currentMovieId = parseInt(document.getElementById("currentMovieId").value);
@@ -88,7 +88,7 @@
 
             const data = await response.json();
             displayResults(data);
-        });
+        }
 
         async function displayResults(data) {
             const resultsDiv = document.getElementById("results");
@@ -108,14 +108,16 @@
 
             for (const movie of recommendations) {
                 const movieDiv = document.createElement("div");
-                movieDiv.className = "movie bg-gray-100 p-2 rounded-lg shadow-md mb-2 flex items-center";
+                movieDiv.className = "movie bg-gray-100 p-2 rounded-lg shadow-md mb-2 flex items-center w-64 cursor-pointer hover:bg-gray-200 transition-colors";
+                movieDiv.dataset.movieId = movie.movieId;
+                movieDiv.dataset.tmdbId = movie.tmdbId;
                 
                 const posterUrl = await fetchMoviePoster(movie.tmdbId);
                 if (posterUrl) {
                     const posterImg = document.createElement("img");
                     posterImg.src = posterUrl;
                     posterImg.alt = movie.title;
-                    posterImg.className = "w-20 h-auto mr-4";
+                    posterImg.className = "w-20 h-auto mr-4 rounded-sm shadow-md";
                     movieDiv.appendChild(posterImg);
                 }
 
@@ -124,13 +126,25 @@
                     <p><strong>${movie.title}</strong></p>
                     <p>Score: ${movie.score.toFixed(2)}</p>
                     <p>Movie ID: ${movie.movieId}</p>
-                    <p>TMDb ID: ${movie.tmdbId}</p>
                 `;
                 movieDiv.appendChild(movieInfo);
+                
+                // Add click event listener to each movie
+                movieDiv.addEventListener('click', () => {
+                    // Update current movie selection
+                    const currentMovieSelect = document.getElementById('currentMovieId');
+                    currentMovieSelect.value = movieDiv.dataset.movieId;
+                    
+                    // Trigger recommendations for clicked movie
+                    getRecommendations();
+                });
                 
                 resultsDiv.appendChild(movieDiv);
             }
         }
+
+        // Event listener for manual recommendations button
+        document.getElementById("getRecommendations").addEventListener("click", getRecommendations);
 
         // Fetch movies when the page loads
         fetchMovies();
