@@ -6,6 +6,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS  # Import CORS
 from scipy.sparse import csr_matrix, vstack
 import time
+import hashlib
+import pickle
+import os
 from joblib import Memory
 from functools import lru_cache
 import threading
@@ -19,9 +22,35 @@ app.config['DEBUG'] = True
 app.logger.setLevel(logging.DEBUG)
 CORS(app)  # Enable CORS for all routes
 
+CACHE_DIR = '.recommendation_cache'
+os.makedirs(CACHE_DIR, exist_ok=True)
+
 # Global variables for pre-computed data
 global_data = threading.local()
 
+def generate_cache_key(user_id, current_movie, weights):
+    """Generate a unique cache key for recommendations"""
+    key_components = [
+        str(user_id), 
+        str(current_movie), 
+        str(weights.get('content', 0.5)), 
+        str(weights.get('collaborative', 0.5))
+    ]
+    return hashlib.md5('_'.join(key_components).encode()).hexdigest()
+
+def save_recommendations_cache(key, recommendations):
+    """Save recommendations to persistent cache"""
+    cache_path = os.path.join(CACHE_DIR, f'{key}_recommendations.pkl')
+    with open(cache_path, 'wb') as f:
+        pickle.dump(recommendations, f)
+
+def load_recommendations_cache(key):
+    """Load recommendations from persistent cache"""
+    cache_path = os.path.join(CACHE_DIR, f'{key}_recommendations.pkl')
+    if os.path.exists(cache_path):
+        with open(cache_path, 'rb') as f:
+            return pickle.load(f)
+    return None
 
 @memory.cache
 def load_link_data():
@@ -181,17 +210,16 @@ def get_collaborative_recommendations(user_id, num_recommendations=5, current_mo
     return recommended_movies
 
 def get_hybrid_recommendations(user_id, weights, num_recommendations=10, current_movie=None):
+
+    cache_key = generate_cache_key(user_id, current_movie, weights)
+    cached_recommendations = load_recommendations_cache(cache_key)
+    if cached_recommendations:
+        return cached_recommendations
+    
     user_index = user_id - 1
     user_ratings = global_data.ratings_matrix[user_index].toarray().flatten()
     user_positive_ratings = tuple(global_data.movies_df.iloc[i]['movieId'] 
                                 for i in np.where(user_ratings >= 4)[0])
-    
-    # Adjust weights to emphasize content-based if current_movie is provided
-    # if current_movie is not None:
-    #     weights = {
-    #         'content': 0.7,  # Increase content-based weight
-    #         'collaborative': 0.3  # Decrease collaborative weight
-    #     }
     
     content_recs = get_content_based_recommendations(user_positive_ratings, num_recommendations, current_movie)
     collaborative_recs = get_collaborative_recommendations(user_id, num_recommendations, current_movie)
@@ -223,12 +251,41 @@ def get_hybrid_recommendations(user_id, weights, num_recommendations=10, current
         'tmdbId': int(global_data.link_df[global_data.link_df['movieId'] == movie_ids[idx]]['tmdbId'].values[0])
     } for idx in sorted_indices[:num_recommendations]]
     
-    return (
+    # Add novelty recommendations (10% of total recommendations)
+    novelty_count = max(1, num_recommendations // 5)
+    
+    # Select random movies not in existing recommendations
+    existing_movie_ids = set(rec['movieId'] for rec in combined_recs)
+    all_movie_ids = set(global_data.movies_df['movieId'])
+    user_rated_movies = set(global_data.movies_df.iloc[np.where(user_ratings >= 4)[0]]['movieId'])
+    novel_movie_candidates = list(all_movie_ids - existing_movie_ids - user_rated_movies)
+    np.random.shuffle(novel_movie_candidates)
+    
+    novelty_recs = [{
+        'movieId': int(movie_id),
+        'title': global_data.movies_df[global_data.movies_df['movieId'] == movie_id]['title'].values[0],
+        'score': -1,  # Explicitly set to -1 to indicate novelty
+        'reason': 'Novelty Recommendation',
+        'tmdbId': int(global_data.link_df[global_data.link_df['movieId'] == movie_id]['tmdbId'].values[0])
+    } for movie_id in novel_movie_candidates[:novelty_count]]
+    
+    # Combine and return recommendations
+    combined_recs.extend(novelty_recs)
+    
+    # return (
+    #     content_recs[:100],
+    #     collaborative_recs[:100],
+    #     combined_recs
+    # )
+    # Save to cache before returning
+    recommendations = (
         content_recs[:100],
         collaborative_recs[:100],
         combined_recs
     )
-
+    save_recommendations_cache(cache_key, recommendations)
+    
+    return recommendations
 @app.before_request
 def initialize_data():
     # Initialize all global data
@@ -261,10 +318,8 @@ def recommendations():
         data = request.json
         user_id = data.get('userIndex')
         current_movie = data.get('currentMovie')
-        print(current_movie)
         weights = data.get('weights', {'content': 0.5, 'collaborative': 0.5})
-        # num_recommendations = data.get('numRecommendations', 10)
-        num_recommendations = data.get('numRecommendations')
+        num_recommendations = data.get('numRecommendations', 10)
 
         if user_id is None or not isinstance(user_id, int):
             return jsonify({'error': 'Invalid user index'}), 400
@@ -288,7 +343,6 @@ def recommendations():
             'response_time': end_time - start_time,
             'currentMovie': current_movie
         })
-
         # return jsonify({
         #         'content_recommendations': content_recommendations,
         #         'collaborative_recommendations': collaborative_recommendations,
